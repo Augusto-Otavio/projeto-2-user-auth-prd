@@ -1,32 +1,77 @@
 <?php
 
-require_once 'UserManager.php';
+require_once 'User.php';
+require_once 'Validator.php';
 
-$manager = new UserManager();
+class UserManager {
+    private array $usuarios = [];
+    private int $nextId = 1;
 
-// Caso 1
-echo "Caso 1 — Cadastro válido" . PHP_EOL;
-echo $manager->registerUser("Maria Oliveira", "maria@email.com", "Senha123") . PHP_EOL . PHP_EOL;
+    private function addUser(string $nome, string $email, string $senha): void {
+        $senhaHash = password_hash($senha, PASSWORD_BCRYPT);
+        $usuario = new User($this->nextId++, $nome, $email, $senhaHash);
+        $this->usuarios[] = $usuario;
+    }
 
-// Caso 2
-echo "Caso 2 — Cadastro com e-mail inválido" . PHP_EOL;
-echo $manager->registerUser("Pedro", "pedro@@email", "Senha123") . PHP_EOL . PHP_EOL;
+    public function registerUser(string $nome, string $email, string $senha): string {
+        foreach ($this->usuarios as $usuario) {
+            if ($usuario->getEmail() === $email) {
+                return "Erro: E-mail já está em uso.";
+            }
+        }
 
-// Caso 3
-$manager->registerUser("João Silva", "joao@email.com", "SenhaForte1");
-echo "Caso 3 — Tentativa de login com senha errada" . PHP_EOL;
-echo $manager->loginUser("joao@email.com", "Errada123") . PHP_EOL . PHP_EOL;
+        $emailCheck = Validator::validateEmail($email);
+        if ($emailCheck !== true) {
+            return "Erro: " . $emailCheck;
+        }
 
-// Caso 4
-$usuarios = $manager->listUsers();
-$idJoao = $usuarios[0]['id'] ?? null;
-echo "Caso 4 — Reset de senha válido" . PHP_EOL;
-if ($idJoao !== null) {
-    echo $manager->resetPassword($idJoao, "NovaSenha1") . PHP_EOL . PHP_EOL;
-} else {
-    echo "Erro: Usuário não encontrado para reset de senha." . PHP_EOL . PHP_EOL;
+        $senhaCheck = Validator::validatePassword($senha);
+        if ($senhaCheck !== true) {
+            return "Erro: " . $senhaCheck;
+        }
+
+        $this->addUser($nome, $email, $senha);
+        return "Usuário cadastrado com sucesso.";
+    }
+
+    public function loginUser(string $email, string $senha): string {
+        $emailCheck = Validator::validateEmail($email);
+        if ($emailCheck !== true) {
+            return "Erro: " . $emailCheck;
+        }
+
+        foreach ($this->usuarios as $usuario) {
+            if ($usuario->getEmail() === $email && password_verify($senha, $usuario->getPassword())) {
+                return "Login de " . $usuario->getName() . " realizado com sucesso.";
+            }
+        }
+        return "Erro: Credenciais inválidas.";
+    }
+
+    public function resetPassword(int $id, string $novaSenha): string {
+        foreach ($this->usuarios as $usuario) {
+            if ($usuario->getId() === $id) {
+                $senhaCheck = Validator::validatePassword($novaSenha);
+                if ($senhaCheck !== true) {
+                    return "Erro: " . $senhaCheck;
+                }
+                $senhaHash = password_hash($novaSenha, PASSWORD_BCRYPT);
+                $usuario->setPassword($senhaHash);
+                return "Senha do usuário " . $usuario->getName() . " alterada com sucesso.";
+            }
+        }
+        return "Erro: Usuário não encontrado.";
+    }
+
+    public function listUsers(): array {
+        $lista = [];
+        foreach ($this->usuarios as $usuario) {
+            $lista[] = [
+                'id' => $usuario->getId(),
+                'nome' => $usuario->getName(),
+                'email' => $usuario->getEmail()
+            ];
+        }
+        return $lista;
+    }
 }
-
-// Caso 5
-echo "Caso 5 — Cadastro de usuário com e-mail duplicado" . PHP_EOL;
-echo $manager->registerUser("Outra Maria", "maria@email.com", "SenhaValida1") . PHP_EOL . PHP_EOL;
